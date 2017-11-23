@@ -15,7 +15,12 @@ const REGISTERS = {
   MODE: 0x11,
   TX_MODE: 0x12,
   RX_MODE: 0x13,
+  MOD_WIDTH: 0x24,
   TX_CONTROL: 0x14
+}
+
+const COMMANDS = {
+  TRANSCIEVE: 0x0C
 }
 
 class MFRC522 {
@@ -37,25 +42,79 @@ class MFRC522 {
       (cb) => {
         this.chipSelectPin.write(1, cb)
       },
-      this.reset.bind(this)
+      this.reset.bind(this),
+      this.resetBaud.bind(this),
+      this.setModWidth.bind(this),
+      this.enableAntenna.bind(this)
     ], () => {
       this.emit('ready')
     })
+  }
+  scanForPICC () {
+    async.series([
+      this.resetBaud.bind(this),
+      this.setModWidth.bind(this),
+
+    ])
+  }
+  transcieveWithPICC () {
+
   }
   reset (cb) {
     this.resetPin.write(0, () => {
       this.resetPin.write(1, cb)
     })
   }
-  writeToRegister (register, data, cb) {
-    register = register << 1
-    register |= (0x01) // sets the read/write bit to write (1)
-    this.spi.transfer(Buffer.from([register].concat(data)), cb)
+  resetBaud (cb) {
+    this.writeToRegister(REGISTERS.TX_MODE, [0x00], (err) => {
+      if (err) {
+        cb(err)
+      }
+      this.writeToRegister(REGISTERS.RX_MODE, [0x00], cb)
+    })
   }
-  readFromRegister (register, numOfBytes, cb) {
-    register = register << 1
-    register &= ~(0x01) // sets the read/write bit to read (0)
-    this.spi.transfer(Buffer.from([register]), cb)
+  setModWidth (cb) {
+    this.writeToRegister(REGISTERS.MOD_WIDTH, [0x00], cb)
+  }
+  enableAntenna (cb) {
+    this.readFromRegister(REGISTERS.TX_CONTROL, (err, data) => {
+      if (err) {
+        cb(err)
+      }
+      if ((data[0] & 0x03) !== 0x03) {
+        this.writeToRegister(REGISTERS.TX_CONTROL, [(data[0] | 0x03)], cb)
+      }
+    })
+  }
+  writeToRegister (register, data, cb) {
+    async.series([
+      (cb) => {
+        this.chipSelectPin.write(0, cb)
+      },
+      (cb) => {
+        register = register << 1
+        register &= ~(0x01 << 7) // sets the read/write bit to write (0)
+        this.spi.transfer(Buffer.from([register].concat(data)), cb)
+      },
+      (cb) => {
+        this.chipSelectPin.write(1, cb)
+      }
+    ], cb)
+  }
+  readFromRegister (register, cb) {
+    async.series([
+      (cb) => {
+        this.chipSelectPin.write(0, cb)
+      },
+      (cb) => {
+        register = register << 1
+        register |= (0x01 << 7) // sets the read/write bit to read (1)
+        this.spi.transfer(Buffer.from([register]), cb)
+      },
+      (cb) => {
+        this.chipSelectPin.write(1, cb)
+      }
+    ], cb)
   }
 }
 
