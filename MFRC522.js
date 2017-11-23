@@ -22,19 +22,25 @@ function MFRC522(opts) {
   if(!(this instanceof MFRC522)){
     return new MFRC522(opts)
   }
-
+  opts = opts || {}
   this.port = Tessel.port[opts.port || 'A']
   this.baud = opts.baud || 4000000
   this.chipSelectPin = this.port.pin[opts.pin || 5]
   this.resetPin = this.port.pin[opts.pin || 6]
-  this.spi = new port.SPI({
+  this.spi = new this.port.SPI({
     clockSpeed: this.baud
   })
 }
 
 MFRC522.prototype.init = function() {
-  this.chipSelectPin.write(1) // disable the chip select
-  this.reset()
+  async.series([
+    (cb) => {
+      this.chipSelectPin.write(1, cb)
+    },
+    this.reset
+  ], () => {
+    this.emit('ready')
+  })
 }
 
 MFRC522.prototype.reset = function(cb) {
@@ -49,7 +55,7 @@ MFRC522.prototype.writeToRegister = function(register, data, cb) {
   this.spi.transfer(Buffer.from([register].concat(data)), cb)
 }
 
-MFRC22.prototype.readFromRegister = function(register, numOfBytes, cb){
+MFRC522.prototype.readFromRegister = function(register, numOfBytes, cb){
   register = register << 1
   register &= ~(0x01) // sets the read/write bit to read (0)
   this.spi.transfer(Buffer.from([register]), cb)
