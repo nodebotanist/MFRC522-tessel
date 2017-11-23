@@ -30,7 +30,7 @@ class MFRC522 {
     this.resetPin = this.port.pin[opts.pin || 6];
     this.spi = new this.port.SPI({
       clockSpeed: this.baud
-    });
+    })
   }
   init() {
     async.series([
@@ -39,23 +39,23 @@ class MFRC522 {
       },
       this.reset
     ], () => {
-      this.emit('ready');
-    });
+      this.emit('ready')
+    })
   }
   reset(cb) {
     this.resetPin.write(0, () => {
-      this.resetPin.write(1, cb);
-    });
+      this.resetPin.write(1, cb)
+    })
   }
   writeToRegister(register, data, cb) {
-    register = register << 1;
+    register = register << 1
     register |= (0x01); // sets the read/write bit to write (1)
-    this.spi.transfer(Buffer.from([register].concat(data)), cb);
+    this.spi.transfer(Buffer.from([register].concat(data)), cb)
   }
   readFromRegister(register, numOfBytes, cb) {
     register = register << 1;
     register &= ~(0x01); // sets the read/write bit to read (0)
-    this.spi.transfer(Buffer.from([register]), cb);
+    this.spi.transfer(Buffer.from([register]), cb)
   }
 }
 
