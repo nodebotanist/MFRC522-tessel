@@ -14,5 +14,12 @@
   "readme": "A bare bones Tessel 2 blinky script.",
   "dependencies": {
     "async": "^2.6.0"
+  },
+  "devDependencies": {
+    "eslint-config-standard": "^10.2.1",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-node": "^5.2.1",
+    "eslint-plugin-promise": "^3.6.0",
+    "eslint-plugin-standard": "^3.0.1"
   }
 }
