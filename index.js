@@ -8,3 +8,5 @@ let mfrc522 = new MFRC522()
 mfrc522.on('ready', () => {
   console.log('ready!')
 })
+
+mfrc522.init()

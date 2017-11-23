@@ -18,47 +18,45 @@ const REGISTERS = {
   TX_CONTROL: 0x14,
 }
 
-function MFRC522(opts) {
-  if(!(this instanceof MFRC522)){
-    return new MFRC522(opts)
+class MFRC522 {
+  constructor(opts) {
+    if (!(this instanceof MFRC522)) {
+      return new MFRC522(opts);
+    }
+    opts = opts || {};
+    this.port = Tessel.port[opts.port || 'A'];
+    this.baud = opts.baud || 4000000;
+    this.chipSelectPin = this.port.pin[opts.pin || 5];
+    this.resetPin = this.port.pin[opts.pin || 6];
+    this.spi = new this.port.SPI({
+      clockSpeed: this.baud
+    });
   }
-  opts = opts || {}
-  this.port = Tessel.port[opts.port || 'A']
-  this.baud = opts.baud || 4000000
-  this.chipSelectPin = this.port.pin[opts.pin || 5]
-  this.resetPin = this.port.pin[opts.pin || 6]
-  this.spi = new this.port.SPI({
-    clockSpeed: this.baud
-  })
-}
-
-MFRC522.prototype.init = function() {
-  async.series([
-    (cb) => {
-      this.chipSelectPin.write(1, cb)
-    },
-    this.reset
-  ], () => {
-    this.emit('ready')
-  })
-}
-
-MFRC522.prototype.reset = function(cb) {
-  this.resetPin.write(0, () => {
-    this.resetPin.write(1, cb)
-  })
-}
-
-MFRC522.prototype.writeToRegister = function(register, data, cb) {
-  register = register << 1
-  register |= (0x01) // sets the read/write bit to write (1)
-  this.spi.transfer(Buffer.from([register].concat(data)), cb)
-}
-
-MFRC522.prototype.readFromRegister = function(register, numOfBytes, cb){
-  register = register << 1
-  register &= ~(0x01) // sets the read/write bit to read (0)
-  this.spi.transfer(Buffer.from([register]), cb)
+  init() {
+    async.series([
+      (cb) => {
+        this.chipSelectPin.write(1, cb);
+      },
+      this.reset
+    ], () => {
+      this.emit('ready');
+    });
+  }
+  reset(cb) {
+    this.resetPin.write(0, () => {
+      this.resetPin.write(1, cb);
+    });
+  }
+  writeToRegister(register, data, cb) {
+    register = register << 1;
+    register |= (0x01); // sets the read/write bit to write (1)
+    this.spi.transfer(Buffer.from([register].concat(data)), cb);
+  }
+  readFromRegister(register, numOfBytes, cb) {
+    register = register << 1;
+    register &= ~(0x01); // sets the read/write bit to read (0)
+    this.spi.transfer(Buffer.from([register]), cb);
+  }
 }
 
 util.inherits(MFRC522, EventEmitter)
