@@ -6,7 +6,7 @@ const Tessel = require('tessel')
 const async = require('async')
 
 const REGISTERS = {
-  COMMAND_REG: 0x01,
+  COMMAND: 0x01,
   ERROR_REG: 0x06,
   STATUS1: 0x07,
   STATUS2: 0x08,
@@ -16,10 +16,13 @@ const REGISTERS = {
   TX_MODE: 0x12,
   RX_MODE: 0x13,
   MOD_WIDTH: 0x24,
-  TX_CONTROL: 0x14
+  TX_CONTROL: 0x14,
+  FIFO_LEVEL: 0x0A,
+  FIFO_DATA: 0x09
 }
 
 const COMMANDS = {
+  PCD_IDLE: 0x00,
   TRANSCIEVE: 0x0C
 }
 
@@ -57,8 +60,33 @@ class MFRC522 {
 
     ])
   }
-  transcieveWithPICC () {
-
+  communicateWithPICC (command, dataToSend, cb) {
+    async.serial([
+      (cb) => {
+        this.writeToRegister(REGISTERS.FIFO_LEVEL, 0x00, cb) // clear FIFO data queue
+      },
+      (cb) => {
+        this.writeToRegister(REGISTERS.COMMAND, COMMANDS.PCD_IDLE, cb)
+      },
+      (cb) => {
+        this.writeToRegister(REGISTERS.FIFO_DATA, dataToSend, cb)
+      },
+      (cb) => {
+        this.writeToRegister(REGISTERS.COMMAND, command, cb)
+      },
+      (cb) => {
+        if (command === COMMANDS.TRANSCIEVE) {
+          this.readFromRegister(REGISTERS.BIT_FRAME, (err, data) => {
+            if (err) {
+              cb(err)
+            }
+            this.writeToRegister(REGISTERS.BIT_FRAME, [(data[0] | 0x80)], cb)
+          })
+        } else {
+          cb(null)
+        }
+      }
+    ], cb)
   }
   reset (cb) {
     this.resetPin.write(0, () => {
