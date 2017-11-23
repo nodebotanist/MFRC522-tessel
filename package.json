@@ -1,5 +1,5 @@
 {
-  "name": "tessel-RC522rfid-reader",
+  "name": "tessel-RC522-rfid-reader",
   "version": "0.0.0",
   "description": "Tessel project",
   "main": "index.js",
