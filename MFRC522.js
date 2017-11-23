@@ -3,6 +3,7 @@
 const EventEmitter = require('events').EventEmitter
 const util = require('util')
 const Tessel = require('tessel')
+const async = require('async')
 
 const REGISTERS = {
   COMMAND_REG: 0x01,
@@ -24,18 +25,33 @@ function MFRC522(opts) {
 
   this.port = Tessel.port[opts.port || 'A']
   this.baud = opts.baud || 4000000
+  this.chipSelectPin = this.port.pin[opts.pin || 5]
+  this.resetPin = this.port.pin[opts.pin || 6]
   this.spi = new port.SPI({
     clockSpeed: this.baud
   })
 }
 
-MFRC522.prototype.writeToRegister = function(register, cb) {
-  register |= (1 << 7) // sets the read/write bit to write (1)
-  this.spi.transfer(Buffer.from([register]), cb)
+MFRC522.prototype.init = function() {
+  this.chipSelectPin.write(1) // disable the chip select
+  this.reset()
+}
+
+MFRC522.prototype.reset = function(cb) {
+  this.resetPin.write(0, () => {
+    this.resetPin.write(1, cb)
+  })
+}
+
+MFRC522.prototype.writeToRegister = function(register, data, cb) {
+  register = register << 1
+  register |= (0x01) // sets the read/write bit to write (1)
+  this.spi.transfer(Buffer.from([register].concat(data)), cb)
 }
 
 MFRC22.prototype.readFromRegister = function(register, numOfBytes, cb){
-  register &= ~(1 << 7) // sets the read/write bit to read (0)
+  register = register << 1
+  register &= ~(0x01) // sets the read/write bit to read (0)
   this.spi.transfer(Buffer.from([register]), cb)
 }
 
