@@ -18,7 +18,8 @@ const REGISTERS = {
   MOD_WIDTH: 0x24,
   TX_CONTROL: 0x14,
   FIFO_LEVEL: 0x0A,
-  FIFO_DATA: 0x09
+  FIFO_DATA: 0x09,
+  COMM_IRQ: 0x04
 }
 
 const COMMANDS = {
@@ -72,7 +73,7 @@ class MFRC522 {
         this.writeToRegister(REGISTERS.FIFO_DATA, dataToSend, cb)
       },
       (cb) => {
-        this.writeToRegister(REGISTERS.COMMAND, command, cb)
+        this.writeToRegister(REGISTERS.COMMAND, [command], cb)
       },
       (cb) => {
         if (command === COMMANDS.TRANSCIEVE) {
@@ -85,6 +86,34 @@ class MFRC522 {
         } else {
           cb(null)
         }
+      },
+      (cb) => {
+        let irqEn = 0x00
+        let waitIRq = 0x00
+
+        if (command === COMMANDS.PCD_AUTHENTICATE) {
+          irqEn = 0x12
+          waitIRq = 0x10
+        }
+        if (command === COMMANDS.PCD_TRANSCEIVE) {
+          irqEn = 0x77
+          waitIRq = 0x30
+        }
+
+        let i = 0
+        let register = null
+        do {
+          this.readFromRegister(REGISTERS.COMM_IRQ, (err, data) => {
+            if (err) {
+              cb(err)
+            }
+            if (data) {
+              register = data
+            }
+          })
+          i++
+        } while ((i !== 0) && !(register & 0x01) && !(register & waitIRq))
+        console.log('made it with i:', i, 'register', register)
       }
     ], cb)
   }
