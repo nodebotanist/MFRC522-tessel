@@ -13,8 +13,7 @@
   "license": "MIT",
   "readme": "A bare bones Tessel 2 blinky script.",
   "dependencies": {
-    "async": "^2.6.0",
-    "sleep": "^5.1.1"
+    "async": "^2.6.0"
   },
   "devDependencies": {
     "eslint-config-standard": "^10.2.1",
