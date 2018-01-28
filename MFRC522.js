@@ -1,7 +1,11 @@
 const async = require('async')
 const Tessel = require('tessel')
 
-const PINS = {
+function MFRC522 () {
+  this.spi = null;
+}
+
+MFRC522.prototype.PINS = {
   CHIP_SELECT: {
     port: 'A',
     pin: 5
@@ -16,12 +20,16 @@ const PINS = {
   }
 }
 
-const REGISTERS = {
+MFRC522.prototype.REGISTERS = {
+  COMMAND_IEN: 0x02,
+  COMMAND_IRQ: 0x04,
+  FIFO_LOVOL: 0x0A,
   TX_CONTROL: 0x14
 }
 
-function MFRC522 () {
-  this.spi = null;
+MFRC522.prototype.COMMANDS = {
+  AUTHENTICATE: 0x0E,
+  TRANSCEIVE: 0x0C
 }
 
 MFRC522.prototype.init = function () {
@@ -60,11 +68,43 @@ MFRC522.prototype.clearBitMask = function (register, mask, callback) {
 }
 
 MFRC522.prototype.antennaOn = function () {
-  this.setBitMask(REGISTERS.TX_CONTROL, 0x03)
+  this.setBitMask(this.REGISTERS.TX_CONTROL, 0x03)
 }
 
 MFRC522.prototype.antennaOff = function () {
-  this.clearBitMask(REGISTERS.TX_CONTROL, 0x03)
+  this.clearBitMask(this.REGISTERS.TX_CONTROL, 0x03)
+}
+
+MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
+  let dataRecieved = []
+  let dataRecievedLength = 0
+  let status = 'error'
+  let irqEn = 0x00
+  let waitIRq = 0x00
+  let lastBits = null
+  let timeout = 2000
+
+  if (command === this.COMMANDS.AUTHENTICATE) {
+    irqEn = 0x12
+    waitIRq = 0x10
+  } else if (command === this.COMMANDS.TRANSCEIVE) {
+    irqEn = 0x77
+    waitIRq = 0x30
+  }
+
+  async.series([
+    this.write.bind(this, [this.REGISTERS.COMMAND_IEN, irqEn | 0x80]),
+    this.clearBitMask.bind(this, [this.REGISTERS.COMMAND_IRQ, 0x80]),
+    this.setBitMask.bind(this, [this.REGISTERS.FIFO_LEVEL, 0x80])
+  ], (err) => {
+    if (err) {
+      callback(err)
+    }
+  })
+}
+
+MFRC522.prototype.search = function () {
+
 }
 
 module.exports = MFRC522
