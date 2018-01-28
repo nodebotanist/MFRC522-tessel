@@ -29,6 +29,9 @@ class MFRC522 {
   write (address, data, callback) {
     this.spi.transfer(Buffer.from([(address << 1) & 0x7E].concat(data)), callback)
   }
+  read (address, callback) {
+    this.spi.transfer(Buffer.from([((address << 1) & 0x7E) | 0x80, 0]), callback)
+  }
 }
 
 module.exports = MFRC522
