@@ -2,7 +2,7 @@ const async = require('async')
 const Tessel = require('tessel')
 
 function MFRC522 () {
-  this.spi = null;
+  this.spi = null
 }
 
 MFRC522.prototype.PINS = {
@@ -21,21 +21,32 @@ MFRC522.prototype.PINS = {
 }
 
 MFRC522.prototype.REGISTERS = {
+  COMMAND: 0x01,
   COMMAND_IEN: 0x02,
   COMMAND_IRQ: 0x04,
-  FIFO_LOVOL: 0x0A,
+  ERROR: 0x06,
+  FIFO_DATA: 0x09,
+  FIFO_LEVEL: 0x0A,
+  BIT_FRAMING: 0x0D,
   TX_CONTROL: 0x14
 }
 
 MFRC522.prototype.COMMANDS = {
-  AUTHENTICATE: 0x0E,
-  TRANSCEIVE: 0x0C
+  IDLE: 0x00,
+  TRANSCEIVE: 0x0C,
+  AUTHENTICATE: 0x0E
+}
+
+MFRC522.prototype.STATUS = {
+  OK: 0,
+  NO_TAG: 1,
+  ERROR: 2
 }
 
 MFRC522.prototype.init = function () {
   this.spi = new Tessel.port['A'].SPI({
     clockSpeed: 4 * 1000 * 1000, // 4KHz
-    chipSelect: Tessel.port[PINS.CHIP_SELECT.port][PINS.CHIP_SELECT.pin]
+    chipSelect: Tessel.port[this.PINS.CHIP_SELECT.port][this.PINS.CHIP_SELECT.pin]
   })
 }
 
@@ -77,12 +88,13 @@ MFRC522.prototype.antennaOff = function () {
 
 MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
   let dataRecieved = []
-  let dataRecievedLength = 0
+  let bitsRecieved = 0
   let status = 'error'
   let irqEn = 0x00
   let waitIRq = 0x00
   let lastBits = null
-  let timeout = 2000
+  let timeoutCounter = 2000
+  let ack = null
 
   if (command === this.COMMANDS.AUTHENTICATE) {
     irqEn = 0x12
@@ -95,12 +107,106 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
   async.series([
     this.write.bind(this, [this.REGISTERS.COMMAND_IEN, irqEn | 0x80]),
     this.clearBitMask.bind(this, [this.REGISTERS.COMMAND_IRQ, 0x80]),
-    this.setBitMask.bind(this, [this.REGISTERS.FIFO_LEVEL, 0x80])
+    this.setBitMask.bind(this, [this.REGISTERS.FIFO_LEVEL, 0x80]),
+    this.write.bind(this, [this.REGISTERS.COMMAND, this.COMMANDS.PCD_IDLE]),
+    (callback) => {
+      async.eachSeries(dataToSend, (data, callback) => {
+        this.write(this.REGISTERS.FIFO_DATA, [data], callback)
+      }, callback)
+    },
+    this.write.bind(this, [this.REGISTERS.COMMAND, command]),
+    (callback) => {
+      if (command === this.COMMANDS.TRANSCEIVE) {
+        this.setBitMask(this.REGISTERS.BIT_FRAMING, 0x80, callback)
+      } else {
+        callback(null)
+      }
+    },
+    (callback) => {
+      async.until(
+        ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq)),
+        (callback) => {
+          this.read(this.REGISTERS.COMMAND_IRQ, (err, data) => {
+            if (err) {
+              callback(err)
+            }
+            callback(null, data)
+          })
+        }
+      )
+    },
+    (callback) => {
+      if (timeoutCounter !== 0) {
+        this.read(this.REGISTERS.ERROR, (err, data) => {
+          if (err) {
+            callback(err)
+          } else {
+            if (data & 0x1B === 0x00) {
+              status = this.STATUS.OK
+            }
+            if (ack & irqEn & 0x01) {
+              status = this.STATUS.NO_TAG
+            }
+            callback(null)
+          }
+        })
+      } else {
+        callback(new Error('MFRC522 Trancieve error.'))
+      }
+    },
+    (callback) => {
+      if (this.status === this.STATUS.NO_TAG | command !== this.COMMANDS.TRANSCEIVE) {
+        callback(null)
+      }
+      this.read(this.REGISTERS.FIFO_LEVEL, (err, bytes) => {
+        if (err) {
+          callback(err)
+        }
+        this.read(this.REGISTERS.CONTROL, (err, data) => {
+          if (err) {
+            callback(err)
+          }
+          lastBits = data[0] & 0x07
+          if (lastBits !== 0) {
+            bitsRecieved = (bytes - 1) * 8 + lastBits
+          } else {
+            bitsRecieved = bytes * 8
+          }
+
+          if (bytes === 0) {
+            bytes = 1
+          } else if (bytes > 255) {
+            bytes = 255
+          }
+
+          let bytesRecieved = 0
+          async.until(
+            bytesRecieved >= bytes,
+            (callback) => {
+              this.read(this.REGISTERS.FIFO_DATA, (err, data) => {
+                if (err) {
+                  callback(err)
+                }
+
+                dataRecieved.append(data)
+                bytesRecieved++
+              })
+            }
+          )
+        })
+      })
+    }
   ], (err) => {
     if (err) {
       callback(err)
     }
   })
+
+  return {
+    status,
+    dataRecieved,
+    bitsRecieved
+  }
 }
 
 MFRC522.prototype.search = function () {
