@@ -26,11 +26,33 @@ class MFRC522 {
       chipSelect: PINS.CHIP_SELECT
     })
   }
-  write (address, data, callback) {
-    this.spi.transfer(Buffer.from([(address << 1) & 0x7E].concat(data)), callback)
+
+  write (register, data, callback) {
+    this.spi.transfer(Buffer.from([(register << 1) & 0x7E].concat(data)), callback)
   }
-  read (address, callback) {
-    this.spi.transfer(Buffer.from([((address << 1) & 0x7E) | 0x80, 0]), callback)
+
+  read (register, callback) {
+    this.spi.transfer(Buffer.from([((register << 1) & 0x7E) | 0x80, 0]), callback)
+  }
+
+  setBitMask (register, mask, callback) {
+    this.read(register, (err, data) => {
+      if (err) {
+        callback(err)
+      } else {
+        this.write(register, data | mask, callback)
+      }
+    })
+  }
+
+  clearBitMask (register, mask, callback) {
+    this.read(register, (err, data) => {
+      if (err) {
+        callback(err)
+      } else {
+        this.write(register, data & (~mask), callback)
+      }
+    })
   }
 }
 
