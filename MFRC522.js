@@ -75,18 +75,25 @@ MFRC522.prototype.STATUS = {
   ERROR: 2
 }
 
-MFRC522.prototype.init = function () {
+MFRC522.prototype.PICC = {
+  REQIDL: 0x26
+}
+
+MFRC522.prototype.init = function (callback) {
   this.spi = new Tessel.port['A'].SPI({
     clockSpeed: 4 * 1000 * 1000, // 4KHz
-    chipSelect: Tessel.port[this.PINS.CHIP_SELECT.port][this.PINS.CHIP_SELECT.pin]
+    chipSelect: Tessel.port[MFRC522.prototype.PINS.CHIP_SELECT.port][MFRC522.prototype.PINS.CHIP_SELECT.pin]
   })
+  callback(null)
 }
 
 MFRC522.prototype.write = function (register, data, callback) {
+  console.log('writing ', data, ' to register ', register)
   this.spi.transfer(Buffer.from([(register << 1) & 0x7E].concat(data)), callback)
 }
 
 MFRC522.prototype.read = function (register, callback) {
+  console.log('reading from ', register)
   this.spi.transfer(Buffer.from([((register << 1) & 0x7E) | 0x80, 0]), callback)
 }
 
@@ -95,7 +102,7 @@ MFRC522.prototype.setBitMask = function (register, mask, callback) {
     if (err) {
       callback(err)
     } else {
-      this.write(register, data | mask, callback)
+      this.write(register, [data | mask], callback)
     }
   })
 }
@@ -105,17 +112,21 @@ MFRC522.prototype.clearBitMask = function (register, mask, callback) {
     if (err) {
       callback(err)
     } else {
-      this.write(register, data & (~mask), callback)
+      this.write(register, [data & (~mask)], callback)
     }
   })
 }
 
-MFRC522.prototype.antennaOn = function () {
-  this.setBitMask(this.REGISTERS.TX_CONTROL, 0x03)
+MFRC522.prototype.antennaOn = function (callback) {
+  this.setBitMask(this.REGISTERS.TX_CONTROL, 0x03, (err) => {
+    callback(err)
+  })
 }
 
-MFRC522.prototype.antennaOff = function () {
-  this.clearBitMask(this.REGISTERS.TX_CONTROL, 0x03)
+MFRC522.prototype.antennaOff = function (callback) {
+  this.clearBitMask(this.REGISTERS.TX_CONTROL, 0x03, (err) => {
+    callback(err)
+  })
 }
 
 MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
@@ -137,16 +148,17 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
   }
 
   async.series([
-    this.write.bind(this, [this.REGISTERS.COMMAND_IEN, irqEn | 0x80]),
-    this.clearBitMask.bind(this, [this.REGISTERS.COMMAND_IRQ, 0x80]),
-    this.setBitMask.bind(this, [this.REGISTERS.FIFO_LEVEL, 0x80]),
-    this.write.bind(this, [this.REGISTERS.COMMAND, this.COMMANDS.PCD_IDLE]),
+    this.write.bind(this, this.REGISTERS.COMMAND_IEN, [irqEn | 0x80]),
+    this.clearBitMask.bind(this, this.REGISTERS.COMMAND_IRQ, [0x80]),
+    this.setBitMask.bind(this, this.REGISTERS.FIFO_LEVEL, [0x80]),
+    this.write.bind(this, this.REGISTERS.COMMAND, [this.COMMANDS.IDLE]),
     (callback) => {
-      async.eachSeries(dataToSend, (data, callback) => {
-        this.write(this.REGISTERS.FIFO_DATA, [data], callback)
+      async.eachSeries(dataToSend, (data, innerCallback) => {
+        console.log('writing data: ', data)
+        this.write(this.REGISTERS.FIFO_DATA, [data], innerCallback)
       }, callback)
     },
-    this.write.bind(this, [this.REGISTERS.COMMAND, command]),
+    this.write.bind(this, this.REGISTERS.COMMAND, [command]),
     (callback) => {
       if (command === this.COMMANDS.TRANSCEIVE) {
         this.setBitMask(this.REGISTERS.BIT_FRAMING, 0x80, callback)
@@ -155,16 +167,18 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
       }
     },
     (callback) => {
+      console.log(timeoutCounter, ack)
       async.until(
-        ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq)),
-        (callback) => {
+        () => ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq)),
+        (innerCallback) => {
+          console.log('detected!')
           this.read(this.REGISTERS.COMMAND_IRQ, (err, data) => {
             if (err) {
-              callback(err)
+              innerCallback(err)
             }
-            callback(null, data)
+            innerCallback(null, data)
           })
-        }
+        }, callback
       )
     },
     (callback) => {
@@ -173,6 +187,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
           if (err) {
             callback(err)
           } else {
+            console.log(data)
             if (data & 0x1B === 0x00) {
               status = this.STATUS.OK
             }
@@ -223,26 +238,29 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
                 dataRecieved.append(data)
                 bytesRecieved++
               })
-            }
-          )
+            })
+          callback(dataRecieved)
         })
       })
     }
-  ], (err) => {
+  ], (err, dataRecieved) => {
     if (err) {
       callback(err)
+    } else {
+      callback(null, dataRecieved)
     }
   })
 
-  return {
+  callback(null, {
     status,
     dataRecieved,
     bitsRecieved
-  }
+  })
 }
 
-MFRC522.prototype.search = function () {
-
+MFRC522.prototype.search = function (reqType, callback) {
+  this.write(this.REGISTERS.BIT_FRAMING, [0x07])
+  this.readerToCard(this.COMMANDS.TRANSCEIVE, reqType, callback)
 }
 
 module.exports = MFRC522

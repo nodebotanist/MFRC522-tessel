@@ -12,12 +12,19 @@ board.on('ready', () => {
   let reader = new MFRC522()
 
   async.series([
-    reader.init,
-    reader.antennaOn
+    reader.init.bind(reader),
+    reader.antennaOn.bind(reader)
   ], (err) => {
     if (err) {
       throw err
     }
     console.log('Reader ready!')
+
+    setInterval(() => {
+      reader.search(reader.PICC.REQIDL, (err, data) => {
+        console.log('error: ', err)
+        console.log('data: ', data)
+      })
+    }, 5000)
   })
 })
