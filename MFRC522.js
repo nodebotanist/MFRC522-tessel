@@ -5,6 +5,8 @@ function MFRC522 () {
   this.spi = null
 }
 
+MFRC522.prototype.MAX_FIFO_LENGTH = 16
+
 MFRC522.prototype.PINS = {
   CHIP_SELECT: {
     port: 'A',
@@ -205,8 +207,8 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
 
           if (bytes === 0) {
             bytes = 1
-          } else if (bytes > 255) {
-            bytes = 255
+          } else if (bytes > this.MAX_FIFO_LENGTH) {
+            bytes = this.MAX_FIFO_LENGTH
           }
 
           let bytesRecieved = 0
