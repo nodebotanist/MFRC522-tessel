@@ -88,12 +88,10 @@ MFRC522.prototype.init = function (callback) {
 }
 
 MFRC522.prototype.write = function (register, data, callback) {
-  console.log('writing ', data, ' to register ', register)
   this.spi.transfer(Buffer.from([(register << 1) & 0x7E].concat(data)), callback)
 }
 
 MFRC522.prototype.read = function (register, callback) {
-  console.log('reading from ', register)
   this.spi.transfer(Buffer.from([((register << 1) & 0x7E) | 0x80, 0]), callback)
 }
 
@@ -154,7 +152,6 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
     this.write.bind(this, this.REGISTERS.COMMAND, [this.COMMANDS.IDLE]),
     (callback) => {
       async.eachSeries(dataToSend, (data, innerCallback) => {
-        console.log('writing data: ', data)
         this.write(this.REGISTERS.FIFO_DATA, [data], innerCallback)
       }, callback)
     },
@@ -167,11 +164,9 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
       }
     },
     (callback) => {
-      console.log(timeoutCounter, ack)
       async.until(
         () => ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq)),
         (innerCallback) => {
-          console.log('detected!')
           this.read(this.REGISTERS.COMMAND_IRQ, (err, data) => {
             if (err) {
               innerCallback(err)
@@ -187,7 +182,6 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
           if (err) {
             callback(err)
           } else {
-            console.log(data)
             if (data & 0x1B === 0x00) {
               status = this.STATUS.OK
             }
