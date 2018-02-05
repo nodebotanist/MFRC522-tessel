@@ -82,7 +82,7 @@ MFRC522.prototype.PICC = {
 MFRC522.prototype.init = function (callback) {
   this.spi = new Tessel.port['A'].SPI({
     clockSpeed: 4 * 1000 * 1000, // 4KHz
-    chipSelect: Tessel.port[MFRC522.prototype.PINS.CHIP_SELECT.port][MFRC522.prototype.PINS.CHIP_SELECT.pin]
+    chipSelect: Tessel.port[MFRC522.prototype.PINS.CHIP_SELECT.port][MFRC522  .prototype.PINS.CHIP_SELECT.pin]
   })
   callback(null)
 }
@@ -117,7 +117,20 @@ MFRC522.prototype.clearBitMask = function (register, mask, callback) {
 
 MFRC522.prototype.antennaOn = function (callback) {
   this.setBitMask(this.REGISTERS.TX_CONTROL, 0x03, (err) => {
-    callback(err)
+    if (err) {
+      callback(err)
+    }
+    this.read(this.REGISTERS.TX_CONTROL, (err, data) => {
+      if (err) {
+        callback(err)
+      }
+      console.log('TX Control Data: ', data[1])
+      if ((data[1] & 0x03) !== 0x03) {
+        callback(new Error('error turning on the antenna!'))
+      } else {
+        callback(null)
+      }
+    })
   })
 }
 
@@ -128,7 +141,7 @@ MFRC522.prototype.antennaOff = function (callback) {
 }
 
 MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
-  let dataRecieved = []
+  let dataRecieved = Buffer.from([])
   let bitsRecieved = 0
   let status = 'error'
   let irqEn = 0x00
@@ -141,6 +154,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
     irqEn = 0x12
     waitIRq = 0x10
   } else if (command === this.COMMANDS.TRANSCEIVE) {
+    console.log('Transcieve command recieved!')
     irqEn = 0x77
     waitIRq = 0x30
   }
@@ -165,18 +179,26 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
     },
     (callback) => {
       async.until(
-        () => ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq)),
+        () => {
+          return ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq))
+        },
         (innerCallback) => {
           this.read(this.REGISTERS.COMMAND_IRQ, (err, data) => {
+            ack = data[0] << 8 | data[1]
+            if (ack !== 0x00) {
+              console.log('Ack: ', ack)
+            }
+            timeoutCounter--
             if (err) {
               innerCallback(err)
             }
             innerCallback(null, data)
-          })
+          })       
         }, callback
       )
     },
     (callback) => {
+      console.log('Timeout counter: ', timeoutCounter, ' ACK: ', ack)
       if (timeoutCounter !== 0) {
         this.read(this.REGISTERS.ERROR, (err, data) => {
           if (err) {
@@ -222,18 +244,23 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
 
           let bytesRecieved = 0
           async.until(
-            bytesRecieved >= bytes,
+            () => bytesRecieved >= bytes,
             (callback) => {
               this.read(this.REGISTERS.FIFO_DATA, (err, data) => {
                 if (err) {
                   callback(err)
                 }
-
-                dataRecieved.append(data)
-                bytesRecieved++
+                if (data && data.length && data.length > 0) {
+                  if (dataRecieved) {
+                    dataRecieved.concat(data)
+                  } else {
+                    dataRecieved = data
+                  }
+                  bytesRecieved++
+                }
               })
             })
-          callback(dataRecieved)
+          callback(null, dataRecieved)
         })
       })
     }
