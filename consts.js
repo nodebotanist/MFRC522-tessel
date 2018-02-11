@@ -1,5 +1,5 @@
 module.exports = {
-  MAX_FIFO_LENGTH: 16,
+  MAX_FIFO_LENGTH: 64,
   PINS: {
     CHIP_SELECT: {
       port: 'A',
