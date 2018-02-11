@@ -124,7 +124,6 @@ MFRC522.prototype.antennaOn = function (callback) {
       if (err) {
         callback(err)
       }
-      console.log('TX Control Data: ', data[1])
       if ((data[1] & 0x03) !== 0x03) {
         callback(new Error('error turning on the antenna!'))
       } else {
@@ -185,20 +184,16 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
         (innerCallback) => {
           this.read(this.REGISTERS.COMMAND_IRQ, (err, data) => {
             ack = data[0] << 8 | data[1]
-            if (ack !== 0x00) {
-              console.log('Ack: ', ack)
-            }
             timeoutCounter--
             if (err) {
               innerCallback(err)
             }
             innerCallback(null, data)
-          })       
+          })
         }, callback
       )
     },
     (callback) => {
-      console.log('Timeout counter: ', timeoutCounter, ' ACK: ', ack)
       if (timeoutCounter !== 0) {
         this.read(this.REGISTERS.ERROR, (err, data) => {
           if (err) {
@@ -230,6 +225,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
             callback(err)
           }
           lastBits = data[0] & 0x07
+          bytes = data[1]
           if (lastBits !== 0) {
             bitsRecieved = (bytes - 1) * 8 + lastBits
           } else {
@@ -243,6 +239,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
           }
 
           let bytesRecieved = 0
+          console.log('Bytes in Queue: ', bytes)
           async.until(
             () => bytesRecieved >= bytes,
             (callback) => {
@@ -251,16 +248,22 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
                   callback(err)
                 }
                 if (data && data.length && data.length > 0) {
-                  if (dataRecieved) {
-                    dataRecieved.concat(data)
+                  if (dataRecieved.length > 0) {
+                    console.log('Data recieved: ', [data])
+                    Buffer.concat([dataRecieved, data])
                   } else {
                     dataRecieved = data
                   }
                   bytesRecieved++
                 }
+                console.log('FIFO DATA: ', data)
+                console.log('Bytes recieved: ', bytesRecieved)
+                console.log('Bytes: ', bytes)
+                callback(null)
               })
+            }, () => {
+              callback(null, dataRecieved)
             })
-          callback(null, dataRecieved)
         })
       })
     }
@@ -272,11 +275,11 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
     }
   })
 
-  callback(null, {
-    status,
-    dataRecieved,
-    bitsRecieved
-  })
+  // callback(null, {
+  //   status,
+  //   dataRecieved,
+  //   bitsRecieved
+  // })
 }
 
 MFRC522.prototype.search = function (reqType, callback) {
