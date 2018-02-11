@@ -82,10 +82,8 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
   let commandRegisterValues = this.setCommandRegisterValues(command)
 
   async.series([
-    this.write.bind(this, CONSTS.REGISTERS.COMMAND_IEN, [commandRegisterValues.irqEn | 0x80]),
-    this.clearBitMask.bind(this, CONSTS.REGISTERS.COMMAND_IRQ, [0x80]),
     this.setBitMask.bind(this, CONSTS.REGISTERS.FIFO_LEVEL, [0x80]), // clears the FIFO Buffer pointer
-    this.write.bind(this, CONSTS.REGISTERS.COMMAND, [CONSTS.COMMANDS.IDLE]),
+    this.write.bind(this, CONSTS.REGISTERS.COMMAND, [CONSTS.COMMANDS.IDLE]), // cancels current command execution
     (callback) => {
       async.eachSeries(dataToSend, (data, innerCallback) => {
         this.write(CONSTS.REGISTERS.FIFO_DATA, [data], innerCallback)
