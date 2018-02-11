@@ -75,25 +75,16 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
   let dataRecieved = Buffer.from([])
   let bitsRecieved = 0
   let status = 'error'
-  let irqEn = 0x00
-  let waitIRq = 0x00
   let lastBits = null
   let timeoutCounter = 2000
   let ack = null
 
-  if (command === CONSTS.COMMANDS.AUTHENTICATE) {
-    irqEn = 0x12
-    waitIRq = 0x10
-  } else if (command === CONSTS.COMMANDS.TRANSCEIVE) {
-    console.log('Transcieve command recieved!')
-    irqEn = 0x77
-    waitIRq = 0x30
-  }
+  let commandRegisterValues = this.setCommandRegisterValues(command)
 
   async.series([
-    this.write.bind(this, CONSTS.REGISTERS.COMMAND_IEN, [irqEn | 0x80]),
+    this.write.bind(this, CONSTS.REGISTERS.COMMAND_IEN, [commandRegisterValues.irqEn | 0x80]),
     this.clearBitMask.bind(this, CONSTS.REGISTERS.COMMAND_IRQ, [0x80]),
-    this.setBitMask.bind(this, CONSTS.REGISTERS.FIFO_LEVEL, [0x80]),
+    this.setBitMask.bind(this, CONSTS.REGISTERS.FIFO_LEVEL, [0x80]), // clears the FIFO Buffer pointer
     this.write.bind(this, CONSTS.REGISTERS.COMMAND, [CONSTS.COMMANDS.IDLE]),
     (callback) => {
       async.eachSeries(dataToSend, (data, innerCallback) => {
@@ -111,7 +102,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
     (callback) => {
       async.until(
         () => {
-          return ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & waitIRq))
+          return ~((timeoutCounter !== 0) && ~(ack & 0x01) && ~(ack & commandRegisterValues.waitIRq))
         },
         (innerCallback) => {
           this.read(CONSTS.REGISTERS.COMMAND_IRQ, (err, data) => {
@@ -135,7 +126,7 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
               // TODO: Make more user friendly status
               status = CONSTS.STATUS.OK
             }
-            if (ack & irqEn & 0x01) {
+            if (ack & commandRegisterValues.irqEn & 0x01) {
               // TODO: Make more user friendly status              
               status = CONSTS.STATUS.NO_TAG
             }
@@ -203,6 +194,22 @@ MFRC522.prototype.readerToCard = function (command, dataToSend, callback) {
       callback(null, dataRecieved)
     }
   })
+}
+
+MFRC522.prototype.setCommandRegisterValues = function (command) {
+  let irqEn, waitIRq
+  if (command === CONSTS.COMMANDS.AUTHENTICATE) {
+    irqEn = 0x12
+    waitIRq = 0x10
+  } else if (command === CONSTS.COMMANDS.TRANSCEIVE) {
+    console.log('Transcieve command recieved!')
+    irqEn = 0x77
+    waitIRq = 0x30
+  }
+  return {
+    irqEn,
+    waitIRq
+  }
 }
 
 MFRC522.prototype.search = function (reqType, callback) {
