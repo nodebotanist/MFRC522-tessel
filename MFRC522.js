@@ -23,10 +23,10 @@ MFRC522.prototype.write = function(register, data, callback) {
   async.series(
     [
       cb => {
-        this.spi.transfer([register], cb)
+        this.spi.transfer(Buffer.from(register), cb)
       },
       cb => {
-        this.spi.transfer([data], cb)
+        this.spi.transfer(Buffer.from(data), cb)
       }
     ],
     callback
@@ -37,7 +37,7 @@ MFRC522.prototype.read = function(register, callback) {
   async.series(
     [
       cb => {
-        this.spi.transfer([0x80 | register], cb) // MSB set to 1 for read
+        this.spi.transfer(Buffer.from([0x80 | register]), cb) // MSB set to 1 for read
       },
       cb => {
         this.spi.transfer([0x00], (err, data) => {
