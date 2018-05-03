@@ -23,17 +23,10 @@ MFRC522.prototype.write = function(register, data, callback) {
   async.series(
     [
       cb => {
-        // Digital Write 0 to chip select
-        cb()
+        this.spi.transfer([register], cb)
       },
       cb => {
-        this.spi.write([register], cb)
-      },
-      cb => {
-        this.spi.write([data], cb)
-      },
-      cb => {
-        // Digital write 1 to chip select
+        this.spi.transfer([data], cb)
       }
     ],
     callback
@@ -44,16 +37,11 @@ MFRC522.prototype.read = function(register, callback) {
   async.series(
     [
       cb => {
-        // Digital Write 0 to chip select
-        cb()
+        this.spi.transfer([0x80 | register], cb) // MSB set to 1 for read
       },
       cb => {
-        this.spi.write([0x80 | register]) // MSB set to 1 for read
-      },
-      cb => {
-        this.spi.write([0x00], () => {
-          // Digital write 1 to chip select
-          cb()
+        this.spi.transfer([0x00], (err, data) => {
+          cb(err, data)
         })
       }
     ],
