@@ -1,4 +1,6 @@
+const util = require('util')
 const async = require('async')
+const EventEmitter = require('events').EventEmitter
 const Tessel = require('tessel')
 
 const CONSTS = require('./consts')
@@ -6,6 +8,8 @@ const CONSTS = require('./consts')
 function MFRC522() {
   this.spi = null
 }
+
+util.inherits(MFRC522, EventEmitter)
 
 MFRC522.prototype.PICC = CONSTS.PICC
 MFRC522.prototype.STATUS = CONSTS.STATUS
@@ -16,7 +20,7 @@ MFRC522.prototype.init = function(callback) {
     chipSelect:
       Tessel.port[CONSTS.PINS.CHIP_SELECT.port][CONSTS.PINS.CHIP_SELECT.pin]
   })
-  callback(null)
+  if(callback) callback(null)
 }
 
 MFRC522.prototype.write = function(register, data, callback) {
